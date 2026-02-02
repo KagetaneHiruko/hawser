@@ -76,15 +76,19 @@ type RegistryCredentials struct {
 
 // ComposeOperation represents a compose operation request
 type ComposeOperation struct {
-	Operation   string                `json:"operation"` // up, down, pull, ps, logs
-	ProjectName string                `json:"projectName"`
-	WorkDir     string                `json:"workDir"`
-	ComposeFile string                `json:"composeFile,omitempty"` // Content of compose file
-	Files       map[string]string     `json:"files,omitempty"`       // All files to write (relative path -> content)
-	Services    []string              `json:"services,omitempty"`    // Specific services to operate on
-	Options     map[string]string     `json:"options,omitempty"`     // Additional options
-	EnvVars     map[string]string     `json:"envVars,omitempty"`     // Environment variables for variable substitution
-	Registries  []RegistryCredentials `json:"registries,omitempty"`  // Registry credentials for docker login
+	Operation       string                `json:"operation"` // up, down, pull, ps, logs
+	ProjectName     string                `json:"projectName"`
+	WorkDir         string                `json:"workDir"`
+	ComposeFile     string                `json:"composeFile,omitempty"`     // Content of compose file
+	ComposeFileName string                `json:"composeFileName,omitempty"` // Explicit compose filename to use (e.g., "docker-compose.prod.yml")
+	Files           map[string]string     `json:"files,omitempty"`           // All files to write (relative path -> content)
+	Services        []string              `json:"services,omitempty"`        // Specific services to operate on
+	Options         map[string]string     `json:"options,omitempty"`         // Additional options
+	EnvVars         map[string]string     `json:"envVars,omitempty"`         // Environment variables for variable substitution
+	Registries      []RegistryCredentials `json:"registries,omitempty"`      // Registry credentials for docker login
+	ForceRecreate   bool                  `json:"forceRecreate,omitempty"`   // Force recreation of containers (--force-recreate)
+	RemoveVolumes   bool                  `json:"removeVolumes,omitempty"`   // Remove volumes on down (--volumes)
+	ServiceName     string                `json:"serviceName,omitempty"`     // Target specific service only (with --no-deps)
 }
 
 // ComposeResult is the result of a compose operation
@@ -209,12 +213,21 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 
 		log.Debugf("Compose: Wrote %d files to %s", len(op.Files), stackDir)
 
-		// Find the compose file in the written files
+		// Determine compose file name:
+		// 1. If ComposeFileName is explicitly provided, use it
+		// 2. Otherwise, auto-detect from standard filenames
 		composeFileName := ""
-		for _, name := range []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} {
-			if _, exists := op.Files[name]; exists {
-				composeFileName = name
-				break
+		if op.ComposeFileName != "" {
+			// Explicit compose filename provided - use it directly
+			composeFileName = op.ComposeFileName
+			log.Debugf("Compose: Using explicit compose filename: %s", composeFileName)
+		} else {
+			// Auto-detect compose file from written files
+			for _, name := range []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} {
+				if _, exists := op.Files[name]; exists {
+					composeFileName = name
+					break
+				}
 			}
 		}
 
@@ -242,8 +255,18 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 	switch op.Operation {
 	case "up":
 		args = append(args, "up", "-d", "--remove-orphans")
+		if op.ForceRecreate {
+			args = append(args, "--force-recreate")
+		}
+		// If targeting a specific service, add --no-deps to avoid affecting other services
+		if op.ServiceName != "" {
+			args = append(args, "--no-deps", op.ServiceName)
+		}
 	case "down":
 		args = append(args, "down", "--remove-orphans")
+		if op.RemoveVolumes {
+			args = append(args, "--volumes")
+		}
 	case "pull":
 		args = append(args, "pull")
 	case "ps":
@@ -263,7 +286,7 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		return nil, fmt.Errorf("unsupported compose operation: %s", op.Operation)
 	}
 
-	// Add specific services if specified
+	// Add specific services if specified (legacy field for backward compatibility)
 	args = append(args, op.Services...)
 
 	// Build full command args: composeArgs + args
