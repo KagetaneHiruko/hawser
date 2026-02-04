@@ -17,6 +17,9 @@ builds:
     goarch:
       - amd64
       - arm64
+      - arm
+    goarm:
+      - "7"
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -63,16 +66,32 @@ dockers:
     goarch: arm64
     dockerfile: Dockerfile
 
+  - image_templates:
+      - "ghcr.io/finsys/hawser:{{ .Version }}-armv7"
+      - "ghcr.io/finsys/hawser:latest-armv7"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm/v7"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    goarch: arm
+    goarm: "7"
+    dockerfile: Dockerfile.armv7
+
 docker_manifests:
   - name_template: "ghcr.io/finsys/hawser:{{ .Version }}"
     image_templates:
       - "ghcr.io/finsys/hawser:{{ .Version }}-amd64"
       - "ghcr.io/finsys/hawser:{{ .Version }}-arm64"
+      - "ghcr.io/finsys/hawser:{{ .Version }}-armv7"
 
   - name_template: "ghcr.io/finsys/hawser:latest"
     image_templates:
       - "ghcr.io/finsys/hawser:latest-amd64"
       - "ghcr.io/finsys/hawser:latest-arm64"
+      - "ghcr.io/finsys/hawser:latest-armv7"
 
 checksum:
   name_template: "checksums.txt"

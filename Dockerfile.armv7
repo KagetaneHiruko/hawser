@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.4
+# =============================================================================
+# Hawser Docker Image - ARMv7 Build (Alpine-based)
+# =============================================================================
+# ARMv7 uses Alpine instead of Wolfi because Wolfi only supports 64-bit.
+# This provides a smaller image than Debian while maintaining compatibility.
+# =============================================================================
+
+FROM alpine:3.21
+
+WORKDIR /app
+
+# Install required packages
+RUN apk add --no-cache \
+    ca-certificates \
+    docker-cli \
+    docker-cli-compose \
+    wget \
+    && mkdir -p /data/stacks
+
+# Set up environment variables
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    PORT=2376 \
+    DOCKER_SOCKET=/var/run/docker.sock \
+    STACKS_DIR=/data/stacks \
+    HEARTBEAT_INTERVAL=30 \
+    REQUEST_TIMEOUT=30 \
+    RECONNECT_DELAY=1 \
+    MAX_RECONNECT_DELAY=60
+
+# Declare as volume to ensure writability even with --read-only
+VOLUME /data/stacks
+
+# Copy pre-built binary (provided by goreleaser)
+COPY hawser /usr/local/bin/hawser
+RUN chmod +x /usr/local/bin/hawser
+
+# Expose default port
+EXPOSE 2376
+
+# Health check - auto-detects TLS mode
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD if [ -n "$TLS_CERT" ]; then wget -q --spider --no-check-certificate https://localhost:${PORT}/_hawser/health; else wget -q --spider http://localhost:${PORT}/_hawser/health; fi || exit 1
+
+# Run as root to access Docker socket (can be changed with --user flag)
+ENTRYPOINT ["/usr/local/bin/hawser"]
