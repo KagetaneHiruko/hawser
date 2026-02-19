@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -201,8 +202,24 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 				}
 			}
 
+			// Decode content: base64-prefixed values contain binary data
+			var fileBytes []byte
+			if strings.HasPrefix(content, "base64:") {
+				decoded, err := base64.StdEncoding.DecodeString(content[7:])
+				if err != nil {
+					return &ComposeResult{
+						Success:  false,
+						Error:    fmt.Sprintf("Failed to decode base64 content for %s: %v", relPath, err),
+						ExitCode: 1,
+					}, nil
+				}
+				fileBytes = decoded
+			} else {
+				fileBytes = []byte(content)
+			}
+
 			// Write file
-			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(filePath, fileBytes, 0644); err != nil {
 				return &ComposeResult{
 					Success:  false,
 					Error:    fmt.Sprintf("Failed to write file %s: %v", relPath, err),
