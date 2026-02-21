@@ -728,7 +728,8 @@ func (c *Client) streamEvents(done <-chan struct{}) error {
 	}()
 
 	// Connect to Docker events stream with type=container filter
-	resp, err := c.dockerClient.StreamRequest(ctx, "GET", "/v1.43/events?type=container", nil, nil)
+	eventsPath := fmt.Sprintf("/%s/events?type=container", c.dockerClient.GetAPIVersion())
+	resp, err := c.dockerClient.StreamRequest(ctx, "GET", eventsPath, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to connect to events: %w", err)
 	}

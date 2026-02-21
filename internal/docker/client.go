@@ -21,8 +21,13 @@ type Client struct {
 	apiVersion   string
 }
 
-// Default API version if negotiation fails
-const defaultAPIVersion = "v1.43"
+// Default API version if negotiation fails (v1.44 = Docker Engine 25.0+)
+const defaultAPIVersion = "v1.44"
+
+// GetAPIVersion returns the negotiated API version (e.g., "v1.44")
+func (c *Client) GetAPIVersion() string {
+	return c.apiVersion
+}
 
 // NewClient creates a new Docker client
 func NewClient(socketPath string) (*Client, error) {
