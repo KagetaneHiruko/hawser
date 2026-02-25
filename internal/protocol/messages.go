@@ -88,7 +88,8 @@ type RequestMessage struct {
 	Path      string            `json:"path"`      // Docker API path
 	Headers   map[string]string `json:"headers,omitempty"`
 	Body      json.RawMessage   `json:"body,omitempty"`
-	Streaming bool              `json:"streaming"` // true for logs, exec, etc.
+	IsBinary  bool              `json:"isBinary,omitempty"` // true when Body is a base64-encoded string (tar uploads)
+	Streaming bool              `json:"streaming"`          // true for logs, exec, etc.
 }
 
 // ResponseMessage is a Docker API response to Dockhand

@@ -29,6 +29,11 @@ func (c *Client) GetAPIVersion() string {
 	return c.apiVersion
 }
 
+// GetSocketPath returns the Docker socket path for raw connections
+func (c *Client) GetSocketPath() string {
+	return c.socketPath
+}
+
 // NewClient creates a new Docker client
 func NewClient(socketPath string) (*Client, error) {
 	// Create HTTP transport for Unix socket

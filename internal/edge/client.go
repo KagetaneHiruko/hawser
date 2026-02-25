@@ -1,6 +1,7 @@
 package edge
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -439,7 +441,22 @@ func (c *Client) handleRequest(req *protocol.RequestMessage) {
 	// Make Docker request
 	var body io.Reader
 	if len(req.Body) > 0 {
-		body = bytes.NewReader(req.Body)
+		if req.IsBinary {
+			// Body is a JSON string containing base64-encoded binary data (tar uploads)
+			var b64str string
+			if err := json.Unmarshal(req.Body, &b64str); err != nil {
+				c.sendJSON(protocol.NewErrorMessage(req.RequestID, "failed to parse base64 body: "+err.Error(), "DECODE_ERROR"))
+				return
+			}
+			decoded, err := base64.StdEncoding.DecodeString(b64str)
+			if err != nil {
+				c.sendJSON(protocol.NewErrorMessage(req.RequestID, "failed to decode base64 body: "+err.Error(), "DECODE_ERROR"))
+				return
+			}
+			body = bytes.NewReader(decoded)
+		} else {
+			body = bytes.NewReader(req.Body)
+		}
 	}
 
 	// Regular request
@@ -703,46 +720,55 @@ func (c *Client) eventsLoop(done <-chan struct{}) {
 	}
 }
 
-// streamEvents connects to Docker events API and streams events
+// streamEvents connects to Docker events API using a raw Unix socket.
+// Uses raw socket instead of http.Client to avoid connection pooling issues
+// that cause immediate EOF on Docker 29+ (see Finsys/dockhand#126).
 func (c *Client) streamEvents(done <-chan struct{}) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	socketPath := c.dockerClient.GetSocketPath()
+	apiVersion := c.dockerClient.GetAPIVersion()
 
-	// Monitor goroutine - cancels context when done is signaled
-	// WaitGroup ensures goroutine exits before function returns
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-done:
-			cancel()
-		case <-ctx.Done():
-			// Context was cancelled, exit goroutine cleanly
-		}
-	}()
-
-	// Ensure cleanup: cancel context (signals goroutine) and wait for it to exit
-	defer func() {
-		cancel()
-		wg.Wait()
-	}()
-
-	// Connect to Docker events stream with type=container filter
-	eventsPath := fmt.Sprintf("/%s/events?type=container", c.dockerClient.GetAPIVersion())
-	resp, err := c.dockerClient.StreamRequest(ctx, "GET", eventsPath, nil, nil)
+	// Open a dedicated Unix socket connection (not pooled)
+	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
-		return fmt.Errorf("failed to connect to events: %w", err)
+		return fmt.Errorf("failed to connect to Docker socket: %w", err)
+	}
+	defer conn.Close()
+
+	// Close the socket when done signal is received
+	go func() {
+		<-done
+		conn.Close()
+	}()
+
+	// Send raw HTTP request and parse response with Go's HTTP parser
+	// (handles chunked transfer encoding automatically)
+	eventsPath := fmt.Sprintf("/%s/events?type=container", apiVersion)
+	httpReq, err := http.NewRequest("GET", "http://localhost"+eventsPath, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create events request: %w", err)
+	}
+	if err := httpReq.Write(conn); err != nil {
+		return fmt.Errorf("failed to send events request: %w", err)
+	}
+
+	reader := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(reader, httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to read events response: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("events API returned status %d", resp.StatusCode)
+	}
+
 	log.Println("Connected to Docker events stream")
 
+	// resp.Body handles chunked transfer encoding transparently
 	decoder := json.NewDecoder(resp.Body)
 	for {
 		select {
 		case <-done:
-			return nil
-		case <-ctx.Done():
 			return nil
 		default:
 		}
@@ -752,8 +778,11 @@ func (c *Client) streamEvents(done <-chan struct{}) error {
 			if err == io.EOF {
 				return fmt.Errorf("events stream closed")
 			}
-			if ctx.Err() != nil {
+			// Check if we're shutting down (conn.Close triggers read error)
+			select {
+			case <-done:
 				return nil
+			default:
 			}
 			return fmt.Errorf("decode error: %w", err)
 		}
