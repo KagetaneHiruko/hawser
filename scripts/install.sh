@@ -193,5 +193,5 @@ elif [ "$INIT_SYSTEM" = "openrc" ]; then
 fi
 
 echo "Manual run (for testing):"
-echo "  Standard mode: hawser --port 2376"
-echo "  Edge mode:     hawser --server wss://... --token your-token"
+echo "  Standard mode: PORT=2376 TOKEN=secret hawser standard"
+echo "  Edge mode:     DOCKHAND_SERVER_URL=wss://... TOKEN=your-token hawser"
