@@ -889,7 +889,7 @@ func (c *Client) sendJSON(v interface{}) error {
 
 	preview := string(data[:min(len(data), 200)])
 	if strings.Contains(preview, `"token"`) {
-		preview = redactJSONField(preview, "token")
+		preview = redactTokenField(preview)
 	}
 	log.Debugf("Sending message: %d bytes, preview: %s", len(data), preview)
 
@@ -1133,11 +1133,12 @@ func (c *Client) isConnected() bool {
 	return c.connected
 }
 
-// redactJSONField replaces the value of a JSON field with [REDACTED] in a string
-func redactJSONField(s, field string) string {
-	pattern := `"` + regexp.QuoteMeta(field) + `"\s*:\s*"[^"]*"`
-	re := regexp.MustCompile(pattern)
-	return re.ReplaceAllString(s, `"`+field+`":"[REDACTED]"`)
+// tokenRedactRegex is pre-compiled to avoid regex compilation on every sendJSON call
+var tokenRedactRegex = regexp.MustCompile(`"token"\s*:\s*"[^"]*"`)
+
+// redactJSONField replaces token values with [REDACTED] in a string
+func redactTokenField(s string) string {
+	return tokenRedactRegex.ReplaceAllString(s, `"token":"[REDACTED]"`)
 }
 
 // startHealthServer starts a minimal HTTP server for Docker health checks
