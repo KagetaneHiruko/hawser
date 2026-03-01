@@ -340,6 +340,13 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		}
 		// If targeting a specific service, add --no-deps to avoid affecting other services
 		if op.ServiceName != "" {
+			if strings.HasPrefix(op.ServiceName, "-") {
+				return &ComposeResult{
+					Success:  false,
+					Error:    fmt.Sprintf("Invalid service name: %q", op.ServiceName),
+					ExitCode: 1,
+				}, nil
+			}
 			args = append(args, "--no-deps", op.ServiceName)
 		}
 	case "down":
@@ -367,7 +374,17 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 	}
 
 	// Add specific services if specified (legacy field for backward compatibility)
-	args = append(args, op.Services...)
+	// Reject values starting with "-" to prevent flag injection
+	for _, svc := range op.Services {
+		if strings.HasPrefix(svc, "-") {
+			return &ComposeResult{
+				Success:  false,
+				Error:    fmt.Sprintf("Invalid service name: %q", svc),
+				ExitCode: 1,
+			}, nil
+		}
+		args = append(args, svc)
+	}
 
 	// Build full command args: composeArgs + args
 	fullArgs := append(c.composeArgs, args...)

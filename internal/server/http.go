@@ -486,8 +486,14 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	uptime := getHostUptime()
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"agentId":"%s","agentName":"%s","dockerVersion":"%s","hawserVersion":"%s","mode":"standard","uptime":%d}`,
-		s.cfg.AgentID, s.cfg.AgentName, dockerVersion, hawserVersion, uptime)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"agentId":       s.cfg.AgentID,
+		"agentName":     s.cfg.AgentName,
+		"dockerVersion": dockerVersion,
+		"hawserVersion": hawserVersion,
+		"mode":          "standard",
+		"uptime":        uptime,
+	})
 }
 
 // handleCompose handles Docker Compose operations

@@ -1122,8 +1122,14 @@ func (c *Client) startHealthServer() {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"agentId":"%s","agentName":"%s","dockerVersion":"%s","hawserVersion":"%s","mode":"edge","connected":%v}`,
-			c.cfg.AgentID, c.cfg.AgentName, dockerVersion, hawserVersion, c.isConnected())
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"agentId":       c.cfg.AgentID,
+			"agentName":     c.cfg.AgentName,
+			"dockerVersion": dockerVersion,
+			"hawserVersion": hawserVersion,
+			"mode":          "edge",
+			"connected":     c.isConnected(),
+		})
 	})
 
 	addr := fmt.Sprintf(":%d", c.cfg.Port)
