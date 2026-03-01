@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -242,10 +243,15 @@ func (c *Client) sendHello() error {
 		hawserVersion = "dev"
 	}
 
+	// Compute SHA-256 hash of token for secure verification
+	// Old Dockhand ignores tokenHash; new Dockhand will prefer it over plaintext token
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(c.cfg.Token)))
+
 	hello := protocol.NewHelloMessage(
 		c.cfg.AgentID,
 		c.cfg.AgentName,
 		c.cfg.Token,
+		tokenHash,
 		dockerVersion,
 		hostname,
 		hawserVersion,
