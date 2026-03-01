@@ -74,7 +74,7 @@ func Run(cfg *config.Config, stop <-chan os.Signal) error {
 	handler = server.loggingMiddleware(handler)
 
 	// Configure server
-	addr := fmt.Sprintf(":%d", cfg.Port)
+	addr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.Port)
 	server.httpServer = &http.Server{
 		Addr:         addr,
 		Handler:      handler,
@@ -207,8 +207,9 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 // For non-interactive exec (no stdin), returns normal HTTP response with output
 // For interactive exec (with stdin from websocket), uses connection hijacking
 func (s *Server) handleExecHijack(w http.ResponseWriter, r *http.Request) {
-	// Read the request body first
-	body, err := io.ReadAll(r.Body)
+	// Read the request body first (limit to 10 MB for exec start payloads)
+	const maxRequestBodySize = 10 << 20 // 10 MB
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize))
 	if err != nil {
 		http.Error(w, "Failed to read request body: "+err.Error(), http.StatusBadRequest)
 		return

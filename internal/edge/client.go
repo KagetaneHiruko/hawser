@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,11 @@ type Client struct {
 	connected   bool
 	connectedMu sync.RWMutex
 }
+
+const (
+	maxExecSessions   = 100
+	maxStreamSessions = 100
+)
 
 // ExecSession tracks an active exec/terminal session
 type ExecSession struct {
@@ -151,6 +157,10 @@ func (c *Client) runWithReconnect() error {
 // connect establishes WebSocket connection to Dockhand
 func (c *Client) connect() error {
 	log.Infof("Connecting to %s", c.cfg.DockhandServerURL)
+
+	if strings.HasPrefix(c.cfg.DockhandServerURL, "ws://") {
+		log.Warnf("WARNING: Using unencrypted WebSocket (ws://). Token and all traffic are sent in cleartext. Use wss:// in production.")
+	}
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
@@ -417,7 +427,7 @@ func (c *Client) handleMessage(data []byte) {
 
 // handleRequest processes Docker API requests
 func (c *Client) handleRequest(req *protocol.RequestMessage) {
-	log.Debugf("Docker API request: %s %s (streaming=%v)", req.Method, req.Path, req.Streaming)
+	log.Infof("Docker API request: %s %s (streaming=%v)", req.Method, req.Path, req.Streaming)
 
 	// Build headers
 	headers := make(map[string]string)
@@ -470,8 +480,9 @@ func (c *Client) handleRequest(req *protocol.RequestMessage) {
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
+	// Read response body (limit to 100 MB to prevent OOM)
+	const maxResponseBodySize = 100 << 20 // 100 MB
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
 	if err != nil {
 		c.sendJSON(protocol.NewErrorMessage(req.RequestID, err.Error(), "READ_ERROR"))
 		return
@@ -486,13 +497,22 @@ func (c *Client) handleRequest(req *protocol.RequestMessage) {
 	}
 
 	// Send response
-	log.Debugf("Docker API response: %s %s -> %d", req.Method, req.Path, resp.StatusCode)
+	log.Infof("Docker API response: %s %s -> %d", req.Method, req.Path, resp.StatusCode)
 	c.sendJSON(protocol.NewResponseMessage(req.RequestID, resp.StatusCode, respHeaders, respBody))
 }
 
 // handleStreamingRequest handles streaming Docker responses (logs, events, etc.)
 // Uses a background context with cancel since streaming can run indefinitely
 func (c *Client) handleStreamingRequest(req *protocol.RequestMessage, headers map[string]string) {
+	c.streamsMu.RLock()
+	count := len(c.streams)
+	c.streamsMu.RUnlock()
+	if count >= maxStreamSessions {
+		log.Warnf("Stream session limit reached (%d), rejecting request %s", maxStreamSessions, req.RequestID)
+		c.sendJSON(protocol.NewErrorMessage(req.RequestID, "too many concurrent streams", "SESSION_LIMIT"))
+		return
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Register stream
@@ -552,7 +572,7 @@ func (c *Client) handleComposeRequest(ctx context.Context, req *protocol.Request
 		return
 	}
 
-	log.Debugf("Compose operation: %s on %s", op.Operation, op.ProjectName)
+	log.Infof("Compose operation: %s on %s", op.Operation, op.ProjectName)
 
 	result, err := c.compose.Execute(ctx, &op)
 	if err != nil {
@@ -861,13 +881,26 @@ func (c *Client) sendJSON(v interface{}) error {
 			resp.RequestID, resp.StatusCode, resp.IsBinary, len(resp.Body))
 	}
 
-	log.Debugf("Sending message: %d bytes, preview: %s", len(data), string(data[:min(len(data), 200)]))
+	preview := string(data[:min(len(data), 200)])
+	if strings.Contains(preview, `"token"`) {
+		preview = redactJSONField(preview, "token")
+	}
+	log.Debugf("Sending message: %d bytes, preview: %s", len(data), preview)
 
 	return c.conn.WriteJSON(v)
 }
 
 // handleExecStart starts a new exec session
 func (c *Client) handleExecStart(msg *protocol.ExecStartMessage) {
+	c.execSessionsMu.RLock()
+	count := len(c.execSessions)
+	c.execSessionsMu.RUnlock()
+	if count >= maxExecSessions {
+		log.Warnf("Exec session limit reached (%d), rejecting session %s", maxExecSessions, msg.ExecID)
+		c.sendJSON(protocol.NewErrorMessage(msg.ExecID, "too many concurrent exec sessions", "SESSION_LIMIT"))
+		return
+	}
+
 	log.Infof("Starting exec session: %s in container %s (cmd: %s, user: %s)", msg.ExecID, msg.ContainerID, msg.Cmd, msg.User)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1069,6 +1102,12 @@ func (c *Client) close() {
 	c.execSessionsMu.Unlock()
 
 	if c.conn != nil {
+		// Send close frame with normal closure status
+		c.conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "shutdown"),
+			time.Now().Add(3*time.Second),
+		)
 		c.conn.Close()
 		c.conn = nil
 	}
@@ -1086,6 +1125,13 @@ func (c *Client) isConnected() bool {
 	c.connectedMu.RLock()
 	defer c.connectedMu.RUnlock()
 	return c.connected
+}
+
+// redactJSONField replaces the value of a JSON field with [REDACTED] in a string
+func redactJSONField(s, field string) string {
+	pattern := `"` + regexp.QuoteMeta(field) + `"\s*:\s*"[^"]*"`
+	re := regexp.MustCompile(pattern)
+	return re.ReplaceAllString(s, `"`+field+`":"[REDACTED]"`)
 }
 
 // startHealthServer starts a minimal HTTP server for Docker health checks
@@ -1132,7 +1178,7 @@ func (c *Client) startHealthServer() {
 		})
 	})
 
-	addr := fmt.Sprintf(":%d", c.cfg.Port)
+	addr := fmt.Sprintf("%s:%d", c.cfg.BindAddress, c.cfg.Port)
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      mux,

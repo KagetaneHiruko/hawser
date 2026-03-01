@@ -18,9 +18,10 @@ type Config struct {
 	TLSSkipVerify     bool   // Skip TLS verification (insecure, for testing)
 
 	// Standard Mode (passive HTTP server)
-	Port    int    // Default: 2376
-	TLSCert string // Optional TLS certificate path
-	TLSKey  string // Optional TLS key path
+	Port        int    // Default: 2376
+	BindAddress string // Default: 0.0.0.0 (all interfaces)
+	TLSCert     string // Optional TLS certificate path
+	TLSKey      string // Optional TLS key path
 
 	// Docker connection
 	DockerSocket string // Default: /var/run/docker.sock
@@ -57,9 +58,10 @@ func Load() (*Config, error) {
 		TLSSkipVerify:     getEnvBool("TLS_SKIP_VERIFY", false),
 
 		// Standard mode
-		Port:    getEnvInt("PORT", 2376),
-		TLSCert: os.Getenv("TLS_CERT"),
-		TLSKey:  os.Getenv("TLS_KEY"),
+		Port:        getEnvInt("PORT", 2376),
+		BindAddress: getEnvString("BIND_ADDRESS", "0.0.0.0"),
+		TLSCert:     os.Getenv("TLS_CERT"),
+		TLSKey:      os.Getenv("TLS_KEY"),
 
 		// Docker
 		DockerSocket: getEnvString("DOCKER_SOCKET", detectDockerSocket()),

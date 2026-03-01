@@ -128,6 +128,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("  Common:")
 	fmt.Println("    DOCKER_SOCKET   Path to Docker socket (default: /var/run/docker.sock)")
+	fmt.Println("    BIND_ADDRESS    Address to bind to (default: 0.0.0.0)")
 	fmt.Println("    AGENT_NAME      Human-readable name for this agent")
 	fmt.Println("    LOG_LEVEL       Logging level: debug, info, warn, error (default: info)")
 	fmt.Println()
