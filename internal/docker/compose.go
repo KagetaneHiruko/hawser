@@ -9,10 +9,34 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Finsys/hawser/internal/log"
 )
+
+// validEnvKeyRegex matches safe environment variable names: letters, digits, underscores.
+// Rejects dangerous keys like LD_PRELOAD, PATH, DOCKER_HOST etc. via denylist below.
+var validEnvKeyRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+// deniedEnvKeys are environment variable names that could be used for code execution
+// or to redirect Docker operations to an attacker-controlled endpoint.
+var deniedEnvKeys = map[string]bool{
+	"LD_PRELOAD":      true,
+	"LD_LIBRARY_PATH": true,
+	"PATH":            true,
+	"DOCKER_HOST":     true,
+	"DOCKER_CONFIG":   true,
+	"DOCKER_CERT_PATH": true,
+	"DOCKER_TLS_VERIFY": true,
+	"DOCKER_CONTEXT":  true,
+	"HOME":            true,
+	"SHELL":           true,
+	"BASH_ENV":        true,
+	"ENV":             true,
+	"CDPATH":          true,
+	"IFS":             true,
+}
 
 // ComposeClient handles Docker Compose operations
 type ComposeClient struct {
@@ -191,6 +215,31 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		for relPath, content := range op.Files {
 			filePath := filepath.Join(stackDir, relPath)
 
+			// Path traversal protection: ensure resolved path stays within stackDir
+			absFilePath, err := filepath.Abs(filePath)
+			if err != nil {
+				return &ComposeResult{
+					Success:  false,
+					Error:    fmt.Sprintf("Failed to resolve path for %s: %v", relPath, err),
+					ExitCode: 1,
+				}, nil
+			}
+			absStackDir, err := filepath.Abs(stackDir)
+			if err != nil {
+				return &ComposeResult{
+					Success:  false,
+					Error:    fmt.Sprintf("Failed to resolve stack directory: %v", err),
+					ExitCode: 1,
+				}, nil
+			}
+			if !strings.HasPrefix(absFilePath, absStackDir+string(os.PathSeparator)) && absFilePath != absStackDir {
+				return &ComposeResult{
+					Success:  false,
+					Error:    fmt.Sprintf("Path traversal rejected: %s escapes stack directory", relPath),
+					ExitCode: 1,
+				}, nil
+			}
+
 			// Create parent directories if needed
 			if dir := filepath.Dir(filePath); dir != stackDir {
 				if err := os.MkdirAll(dir, 0755); err != nil {
@@ -345,6 +394,19 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 
 	// Add environment variables for compose variable substitution
 	for key, value := range op.EnvVars {
+		// Validate env var key format (alphanumeric + underscore only)
+		if !validEnvKeyRegex.MatchString(key) {
+			return &ComposeResult{
+				Success:  false,
+				Error:    fmt.Sprintf("Invalid environment variable name: %q", key),
+				ExitCode: 1,
+			}, nil
+		}
+		// Block dangerous env vars that could enable code execution or redirect Docker
+		if deniedEnvKeys[strings.ToUpper(key)] {
+			log.Warnf("Compose: Blocked dangerous environment variable: %s", key)
+			continue
+		}
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
 

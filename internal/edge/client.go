@@ -192,6 +192,9 @@ func (c *Client) connect() error {
 	c.conn = conn
 	c.mu.Unlock()
 
+	// Limit max inbound message size to 16 MB to prevent OOM from malicious server
+	conn.SetReadLimit(16 << 20)
+
 	// Send hello message
 	if err := c.sendHello(); err != nil {
 		conn.Close()

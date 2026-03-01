@@ -27,6 +27,7 @@ type Server struct {
 	dockerClient *docker.Client
 	compose      *docker.ComposeClient
 	httpServer   *http.Server
+	rateLimiter  *AuthRateLimiter
 }
 
 // Run starts the Standard mode HTTP server
@@ -58,6 +59,7 @@ func Run(cfg *config.Config, stop <-chan os.Signal) error {
 		cfg:          cfg,
 		dockerClient: dockerClient,
 		compose:      composeClient,
+		rateLimiter:  NewAuthRateLimiter(10, 1*time.Minute), // 10 failed attempts per minute per IP
 	}
 
 	// Create HTTP handler
@@ -540,13 +542,19 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 
 		// If token is configured, require it
 		if s.cfg.Token != "" {
-			token := r.Header.Get("X-Hawser-Token")
-			if token == "" {
-				token = r.URL.Query().Get("token")
+			clientIP := getClientIP(r)
+
+			// Check if IP is blocked due to too many failed attempts
+			if s.rateLimiter.IsBlocked(clientIP) {
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
 			}
+
+			token := r.Header.Get("X-Hawser-Token")
 
 			// Use constant-time comparison to prevent timing attacks
 			if subtle.ConstantTimeCompare([]byte(token), []byte(s.cfg.Token)) != 1 {
+				s.rateLimiter.RecordFailure(clientIP)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
