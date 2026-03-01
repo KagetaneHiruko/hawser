@@ -202,6 +202,17 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		// NEW: File-based approach - write all files to stack directory
 		stackDir = filepath.Join(c.stacksDir, op.ProjectName)
 
+		// Resolve stackDir to absolute path for path traversal validation
+		absStackDir, err := filepath.Abs(stackDir)
+		if err != nil {
+			return &ComposeResult{
+				Success:  false,
+				Error:    fmt.Sprintf("Failed to resolve stack directory: %v", err),
+				ExitCode: 1,
+			}, nil
+		}
+		stackDir = absStackDir
+
 		// Create stack directory
 		if err := os.MkdirAll(stackDir, 0755); err != nil {
 			return &ComposeResult{
@@ -224,15 +235,7 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 					ExitCode: 1,
 				}, nil
 			}
-			absStackDir, err := filepath.Abs(stackDir)
-			if err != nil {
-				return &ComposeResult{
-					Success:  false,
-					Error:    fmt.Sprintf("Failed to resolve stack directory: %v", err),
-					ExitCode: 1,
-				}, nil
-			}
-			if !strings.HasPrefix(absFilePath, absStackDir+string(os.PathSeparator)) && absFilePath != absStackDir {
+			if !strings.HasPrefix(absFilePath, stackDir+string(os.PathSeparator)) && absFilePath != stackDir {
 				return &ComposeResult{
 					Success:  false,
 					Error:    fmt.Sprintf("Path traversal rejected: %s escapes stack directory", relPath),
@@ -241,7 +244,7 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 			}
 
 			// Create parent directories if needed
-			if dir := filepath.Dir(filePath); dir != stackDir {
+			if dir := filepath.Dir(absFilePath); dir != stackDir {
 				if err := os.MkdirAll(dir, 0755); err != nil {
 					return &ComposeResult{
 						Success:  false,
@@ -267,15 +270,15 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 				fileBytes = []byte(content)
 			}
 
-			// Write file
-			if err := os.WriteFile(filePath, fileBytes, 0644); err != nil {
+			// Write file using validated absolute path
+			if err := os.WriteFile(absFilePath, fileBytes, 0644); err != nil {
 				return &ComposeResult{
 					Success:  false,
 					Error:    fmt.Sprintf("Failed to write file %s: %v", relPath, err),
 					ExitCode: 1,
 				}, nil
 			}
-			log.Debugf("Compose: Wrote file %s to %s", relPath, filePath)
+			log.Debugf("Compose: Wrote file %s to %s", relPath, absFilePath)
 		}
 
 		log.Debugf("Compose: Wrote %d files to %s", len(op.Files), stackDir)
