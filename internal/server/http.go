@@ -362,6 +362,19 @@ func (s *Server) handleEventsStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dockerConn.Close()
 
+	// Close the Docker socket when the client disconnects so the goroutine doesn't
+	// leak indefinitely. Without this, every client disconnect leaves a goroutine
+	// blocked on resp.Body.Read() until Docker restarts, slowly exhausting FDs.
+	connDone := make(chan struct{})
+	defer close(connDone)
+	go func() {
+		select {
+		case <-r.Context().Done():
+			dockerConn.Close()
+		case <-connDone:
+		}
+	}()
+
 	// Build the HTTP request to Docker
 	dockerReq, err := http.NewRequest(r.Method, "http://localhost"+r.URL.RequestURI(), nil)
 	if err != nil {
