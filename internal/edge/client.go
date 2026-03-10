@@ -263,7 +263,7 @@ func (c *Client) sendHello() error {
 
 // waitForWelcome waits for the welcome message from Dockhand
 func (c *Client) waitForWelcome() error {
-	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	defer c.conn.SetReadDeadline(time.Time{})
 
 	_, data, err := c.conn.ReadMessage()
