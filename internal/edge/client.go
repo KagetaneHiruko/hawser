@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -140,14 +141,18 @@ func (c *Client) runWithReconnect() error {
 		default:
 		}
 
-		log.Infof("Reconnecting in %v...", backoff)
+		// Apply ±25% jitter to spread reconnection attempts (prevents thundering herd)
+		jitter := time.Duration(rand.Int63n(int64(backoff)/2)) - backoff/4
+		delay := backoff + jitter
+
+		log.Infof("Reconnecting in %v...", delay)
 		select {
-		case <-time.After(backoff):
+		case <-time.After(delay):
 		case <-c.stop:
 			return nil
 		}
 
-		// Exponential backoff
+		// Exponential backoff (raw value doubles, jitter applied on next iteration)
 		backoff *= 2
 		if backoff > maxBackoff {
 			backoff = maxBackoff
@@ -263,7 +268,7 @@ func (c *Client) sendHello() error {
 
 // waitForWelcome waits for the welcome message from Dockhand
 func (c *Client) waitForWelcome() error {
-	c.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(time.Duration(c.cfg.WelcomeTimeout) * time.Second))
 	defer c.conn.SetReadDeadline(time.Time{})
 
 	_, data, err := c.conn.ReadMessage()

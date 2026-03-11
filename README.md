@@ -185,6 +185,7 @@ DOCKER_SOCKET=/var/run/docker.sock
 # HEARTBEAT_INTERVAL=30
 # RECONNECT_DELAY=1
 # MAX_RECONNECT_DELAY=60
+# WELCOME_TIMEOUT=30
 ```
 
 **Manual installation steps:**
@@ -439,6 +440,7 @@ Hawser is configured via environment variables:
 | `REQUEST_TIMEOUT` | Request timeout in seconds | `30` |
 | `RECONNECT_DELAY` | Initial reconnect delay (Edge mode) | `1` |
 | `MAX_RECONNECT_DELAY` | Maximum reconnect delay | `60` |
+| `WELCOME_TIMEOUT` | Timeout in seconds waiting for welcome after hello (Edge mode) | `30` |
 | `LOG_LEVEL` | Logging level: `debug`, `info`, `warn`, `error` | `info` |
 | `SKIP_DF_COLLECTION` | Skip disk usage collection (see below) | - |
 
@@ -535,7 +537,7 @@ When disabled, disk metrics will show as 0 in Dockhand (displayed as "N/A").
 
 ### Reliability
 
-- **Auto-reconnect**: Edge mode automatically reconnects with exponential backoff
+- **Auto-reconnect**: Edge mode automatically reconnects with exponential backoff and ±25% random jitter to prevent thundering herds when multiple agents reconnect simultaneously (e.g., after a Dockhand restart)
 - **Heartbeat**: Regular keepalive messages maintain connection health
 - **Graceful shutdown**: Clean shutdown on SIGTERM/SIGINT
 
