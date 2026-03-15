@@ -5,7 +5,7 @@ Keeping Dockhand secure is a **top** priority. We highly value community contrib
 > [!IMPORTANT]
 > If you discover a security vulnerability, please do not create a public GitHub issue - this can expose users to risk before a fix is available.
 > If you find a security vulnerability, we ask that you keep it private and avoid opening a public issue on GitHub. 
-> Instead, please email our security team directly at [[security@dockhand.pro](mailto:security@dockhand.pro)].
+> Instead, please email us directly at [[security@dockhand.pro](mailto:security@dockhand.pro)]. This inbox has the highest priority.
 
 ## Details to Include
 
