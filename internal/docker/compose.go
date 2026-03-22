@@ -115,6 +115,7 @@ type ComposeOperation struct {
 	RemoveVolumes   bool                  `json:"removeVolumes,omitempty"`   // Remove volumes on down (--volumes)
 	ServiceName     string                `json:"serviceName,omitempty"`     // Target specific service only (with --no-deps)
 	Build           bool                  `json:"build,omitempty"`           // Build images before starting (--build)
+	PullPolicy      string                `json:"pullPolicy,omitempty"`      // Pull policy: 'always' | 'missing' | 'never'
 }
 
 // ComposeResult is the result of a compose operation
@@ -337,6 +338,9 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		args = append(args, "up", "-d", "--remove-orphans")
 		if op.Build {
 			args = append(args, "--build")
+		}
+		if op.PullPolicy != "" {
+			args = append(args, "--pull", op.PullPolicy)
 		}
 		if op.ForceRecreate {
 			args = append(args, "--force-recreate")
