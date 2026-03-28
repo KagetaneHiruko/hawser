@@ -322,9 +322,15 @@ func (c *ComposeClient) Execute(ctx context.Context, op *ComposeOperation) (*Com
 		args = append(args, "-f", "-")
 	}
 
-	// If .env.dockhand exists in the stack directory, add it as an --env-file.
-	// This supports git stacks where Dockhand writes non-secret overrides to .env.dockhand.
+	// Add env files from the stack directory.
+	// Order matters: .env first (base repo values), .env.dockhand second (user overrides).
+	// Later --env-file entries override earlier ones in Docker Compose.
 	if stackDir != "" {
+		envPath := filepath.Join(stackDir, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			args = append(args, "--env-file", envPath)
+			log.Debugf("Compose: Adding --env-file %s", envPath)
+		}
 		envDockhandPath := filepath.Join(stackDir, ".env.dockhand")
 		if _, err := os.Stat(envDockhandPath); err == nil {
 			args = append(args, "--env-file", envDockhandPath)
