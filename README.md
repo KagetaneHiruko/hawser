@@ -240,7 +240,13 @@ sudo journalctl -u hawser -f
 
 ### Docker
 
-> **Note:** Hawser stores compose stack files in `/data/stacks`. This is declared as a `VOLUME` in the image, so it's always writable. For persistent stack files, mount a host directory to this path.
+> **Important:** If your compose stacks use relative file bind mounts (e.g., `./config.conf:/app/config.conf`),
+> you **must** use a host path bind mount for `STACKS_DIR` — not a named volume. The path inside the container
+> must match the host path, because Docker daemon resolves bind mount sources on the host filesystem.
+>
+> Example: `-v /opt/hawser-stacks:/opt/hawser-stacks -e STACKS_DIR=/opt/hawser-stacks`
+>
+> If your stacks only use named volumes or absolute paths, a named volume (`-v hawser_stacks:/data/stacks`) works fine.
 
 **Standard Mode** - Agent listens for connections:
 
@@ -248,7 +254,8 @@ sudo journalctl -u hawser -f
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -p 2376:2376 \
   ghcr.io/finsys/hawser:latest
 ```
@@ -259,7 +266,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -p 2376:2376 \
   -e TOKEN=your-secret-token \
   ghcr.io/finsys/hawser:latest
@@ -271,7 +279,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -v /path/to/certs:/certs:ro \
   -p 2376:2376 \
   -e TLS_CERT=/certs/server.crt \
@@ -285,7 +294,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -v /path/to/certs:/certs:ro \
   -p 2376:2376 \
   -e TLS_CERT=/certs/server.crt \
@@ -300,7 +310,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -e DOCKHAND_SERVER_URL=wss://your-dockhand.example.com/api/hawser/connect \
   -e TOKEN=your-agent-token \
   ghcr.io/finsys/hawser:latest
@@ -312,7 +323,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -v /path/to/dockhand-ca.crt:/certs/ca.crt:ro \
   -e DOCKHAND_SERVER_URL=wss://your-dockhand.example.com/api/hawser/connect \
   -e TOKEN=your-agent-token \
@@ -336,7 +348,8 @@ docker build -f Dockerfile.dev -t hawser:local .
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -p 2376:2376 \
   hawser:local
 
@@ -344,7 +357,8 @@ docker run -d \
 docker run -d \
   --name hawser \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v hawser_stacks:/data/stacks \
+  -v /opt/hawser-stacks:/opt/hawser-stacks \
+  -e STACKS_DIR=/opt/hawser-stacks \
   -e DOCKHAND_SERVER_URL=wss://your-dockhand.example.com/api/hawser/connect \
   -e TOKEN=your-agent-token \
   hawser:local
@@ -433,7 +447,7 @@ Hawser is configured via environment variables:
 | `TLS_KEY` | Path to TLS private key (Standard mode server key) | - |
 | `BIND_ADDRESS` | Address to bind to (use `127.0.0.1` to restrict to localhost) | `0.0.0.0` |
 | `DOCKER_SOCKET` | Docker socket path | `/var/run/docker.sock` |
-| `STACKS_DIR` | Directory for compose stack files (requires Dockhand 1.0.5+) | `/tmp/stacks` |
+| `STACKS_DIR` | Directory for compose stack files (requires Dockhand 1.0.5+). Use a host path bind mount with matching paths if stacks use relative file bind mounts. | `/data/stacks` |
 | `AGENT_ID` | Unique agent identifier | Auto-generated UUID |
 | `AGENT_NAME` | Human-readable agent name | Hostname |
 | `HEARTBEAT_INTERVAL` | Heartbeat interval in seconds | `30` |
