@@ -111,5 +111,5 @@ release:
     owner: Finsys
     name: hawser
   prerelease: auto
-  draft: false
+  draft: true
   name_template: "v{{ .Version }}"
