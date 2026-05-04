@@ -631,6 +631,10 @@ func isStreamingRequest(path, method string) bool {
 	if (strings.Contains(path, "/images/create") || strings.Contains(path, "/images/push")) && method == "POST" {
 		return true
 	}
+	// Container wait (can block for minutes during vulnerability scans)
+	if strings.Contains(path, "/wait") && method == "POST" {
+		return true
+	}
 	return false
 }
 
