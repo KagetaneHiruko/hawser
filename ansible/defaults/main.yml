@@ -1,0 +1,39 @@
+---
+# Hawser version to install ("latest" resolves from GitHub releases)
+hawser_version: "latest"
+
+# Connection mode: "standard" (listen) or "edge" (connect outbound)
+hawser_mode: "standard"
+
+# Standard mode: port to listen on
+hawser_port: 2376
+
+# Authentication token (required)
+hawser_token: ""
+
+# Agent display name in Dockhand
+hawser_agent_name: "{{ inventory_hostname }}"
+
+# Edge mode: Dockhand WebSocket URL (required for edge mode)
+hawser_dockhand_url: ""
+
+# Logging level: debug, info, warn, error
+hawser_log_level: "info"
+
+# TLS for standard mode (both required together)
+hawser_tls_cert: ""
+hawser_tls_key: ""
+
+# TLS for edge mode
+hawser_tls_skip_verify: false
+hawser_ca_cert: ""
+
+# Installation paths
+hawser_install_dir: "/usr/local/bin"
+
+# Service user and group (group must have Docker socket access)
+hawser_user: "root"
+hawser_group: "docker"
+
+# GitHub repository for downloads
+hawser_github_repo: "Finsys/hawser"

@@ -1,0 +1,23 @@
+---
+- name: Stop and disable hawser service
+  ansible.builtin.systemd:
+    name: hawser
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Remove systemd unit file
+  ansible.builtin.file:
+    path: /etc/systemd/system/hawser.service
+    state: absent
+  notify: Reload systemd
+
+- name: Remove environment file
+  ansible.builtin.file:
+    path: /etc/hawser.env
+    state: absent
+
+- name: Remove hawser binary
+  ansible.builtin.file:
+    path: "{{ hawser_install_dir }}/hawser"
+    state: absent

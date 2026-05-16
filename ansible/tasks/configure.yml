@@ -1,0 +1,52 @@
+---
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: "{{ hawser_group }}"
+    state: present
+  when: hawser_group != "root"
+
+- name: Deploy environment file
+  ansible.builtin.template:
+    src: hawser.env.j2
+    dest: /etc/hawser.env
+    owner: "{{ hawser_user }}"
+    group: "{{ hawser_group }}"
+    mode: "0600"
+  notify: Restart hawser
+  no_log: true
+
+- name: Deploy systemd unit
+  ansible.builtin.template:
+    src: hawser.service.j2
+    dest: /etc/systemd/system/hawser.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart hawser
+
+- name: Enable and start service
+  ansible.builtin.systemd:
+    name: hawser
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for service to start
+  ansible.builtin.pause:
+    seconds: 2
+
+- name: Verify service is running
+  ansible.builtin.systemd:
+    name: hawser
+  register: _hawser_service_state
+
+- name: Assert service is active
+  ansible.builtin.assert:
+    that:
+      - _hawser_service_state.status.ActiveState == "active"
+    fail_msg: >-
+      Hawser service is not running (state: {{ _hawser_service_state.status.ActiveState }}).
+      Check logs with: journalctl -u hawser -n 50
+    quiet: true

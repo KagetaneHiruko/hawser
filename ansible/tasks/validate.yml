@@ -1,0 +1,45 @@
+---
+- name: Validate token is set
+  ansible.builtin.assert:
+    that:
+      - hawser_token | length > 0
+    fail_msg: "hawser_token is required. Set via -e hawser_token=SECRET or in inventory."
+    quiet: true
+
+- name: Validate mode is valid
+  ansible.builtin.assert:
+    that:
+      - hawser_mode in ['standard', 'edge']
+    fail_msg: "hawser_mode must be 'standard' or 'edge', got '{{ hawser_mode }}'."
+    quiet: true
+
+- name: Validate edge mode has dockhand URL
+  ansible.builtin.assert:
+    that:
+      - hawser_dockhand_url | length > 0
+    fail_msg: "hawser_dockhand_url is required for edge mode."
+    quiet: true
+  when: hawser_mode == "edge"
+
+- name: Validate dockhand URL protocol
+  ansible.builtin.assert:
+    that:
+      - hawser_dockhand_url is match('^wss?://')
+    fail_msg: "hawser_dockhand_url must start with ws:// or wss://"
+    quiet: true
+  when: hawser_mode == "edge" and hawser_dockhand_url | length > 0
+
+- name: Validate TLS cert and key are set together
+  ansible.builtin.assert:
+    that:
+      - (hawser_tls_cert | length > 0) == (hawser_tls_key | length > 0)
+    fail_msg: "hawser_tls_cert and hawser_tls_key must both be set or both be empty."
+    quiet: true
+
+- name: Validate port range
+  ansible.builtin.assert:
+    that:
+      - hawser_port | int >= 1
+      - hawser_port | int <= 65535
+    fail_msg: "hawser_port must be between 1 and 65535."
+    quiet: true

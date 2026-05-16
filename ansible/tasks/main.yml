@@ -1,0 +1,9 @@
+---
+- name: Validate configuration
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Install hawser binary
+  ansible.builtin.import_tasks: install.yml
+
+- name: Configure systemd service
+  ansible.builtin.import_tasks: configure.yml

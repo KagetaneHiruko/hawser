@@ -1,0 +1,27 @@
+[Unit]
+Description=Hawser - Dockhand Remote Docker Agent
+Documentation=https://github.com/Finsys/hawser
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User={{ hawser_user }}
+Group={{ hawser_group }}
+EnvironmentFile=/etc/hawser.env
+ExecStart={{ hawser_install_dir }}/hawser{% if hawser_mode == 'standard' %} standard --port {{ hawser_port }}{% endif %}
+
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/
+
+[Install]
+WantedBy=multi-user.target

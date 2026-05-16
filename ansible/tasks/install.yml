@@ -1,0 +1,105 @@
+---
+- name: Detect system architecture
+  ansible.builtin.set_fact:
+    _hawser_arch: >-
+      {{ 'arm64' if ansible_architecture == 'aarch64'
+         else 'arm' if ansible_architecture in ['armv7l', 'armv6l']
+         else 'amd64' }}
+
+- name: Resolve latest version from GitHub
+  when: hawser_version == "latest"
+  block:
+    - name: Query GitHub releases API
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ hawser_github_repo }}/releases/latest"
+        return_content: true
+        headers:
+          Accept: "application/vnd.github.v3+json"
+      register: _hawser_latest_release
+
+    - name: Set resolved version
+      ansible.builtin.set_fact:
+        _hawser_resolved_version: "{{ _hawser_latest_release.json.tag_name }}"
+
+- name: Use explicit version
+  ansible.builtin.set_fact:
+    _hawser_resolved_version: "{{ hawser_version }}"
+  when: hawser_version != "latest"
+
+- name: Compute version number and tarball name
+  ansible.builtin.set_fact:
+    _hawser_version_number: "{{ _hawser_resolved_version | regex_replace('^v', '') }}"
+    _hawser_tarball: "hawser_{{ _hawser_resolved_version | regex_replace('^v', '') }}_linux_{{ _hawser_arch | trim }}.tar.gz"
+
+- name: Check if hawser is already installed
+  ansible.builtin.stat:
+    path: "{{ hawser_install_dir }}/hawser"
+  register: _hawser_binary
+
+- name: Check installed version
+  ansible.builtin.command:
+    cmd: "{{ hawser_install_dir }}/hawser --version"
+  register: _hawser_installed_version
+  changed_when: false
+  failed_when: false
+  when: _hawser_binary.stat.exists
+
+- name: Determine if install is needed
+  ansible.builtin.set_fact:
+    _hawser_needs_install: >-
+      {{ not _hawser_binary.stat.exists or
+         (_hawser_installed_version.stdout is defined and
+          _hawser_version_number not in _hawser_installed_version.stdout) }}
+
+- name: Download and install hawser
+  when: _hawser_needs_install | bool
+  block:
+    - name: Create temp directory
+      ansible.builtin.tempfile:
+        state: directory
+      register: _hawser_tmpdir
+
+    - name: Download tarball
+      ansible.builtin.get_url:
+        url: "https://github.com/{{ hawser_github_repo }}/releases/download/{{ _hawser_resolved_version }}/{{ _hawser_tarball }}"
+        dest: "{{ _hawser_tmpdir.path }}/{{ _hawser_tarball }}"
+        mode: "0644"
+
+    - name: Download checksums
+      ansible.builtin.get_url:
+        url: "https://github.com/{{ hawser_github_repo }}/releases/download/{{ _hawser_resolved_version }}/checksums.txt"
+        dest: "{{ _hawser_tmpdir.path }}/checksums.txt"
+        mode: "0644"
+
+    - name: Verify SHA256 checksum
+      ansible.builtin.shell:
+        cmd: "set -o pipefail && cd {{ _hawser_tmpdir.path }} && grep '{{ _hawser_tarball }}' checksums.txt | sha256sum -c -"
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Extract binary from tarball
+      ansible.builtin.unarchive:
+        src: "{{ _hawser_tmpdir.path }}/{{ _hawser_tarball }}"
+        dest: "{{ _hawser_tmpdir.path }}"
+        remote_src: true
+
+    - name: Stop service before replacing binary
+      ansible.builtin.systemd:
+        name: hawser
+        state: stopped
+      failed_when: false
+
+    - name: Install binary
+      ansible.builtin.copy:
+        src: "{{ _hawser_tmpdir.path }}/hawser"
+        dest: "{{ hawser_install_dir }}/hawser"
+        mode: "0755"
+        remote_src: true
+      notify: Restart hawser
+
+  always:
+    - name: Clean up temp directory
+      ansible.builtin.file:
+        path: "{{ _hawser_tmpdir.path }}"
+        state: absent
+      when: _hawser_tmpdir.path is defined

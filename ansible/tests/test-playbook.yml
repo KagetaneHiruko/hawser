@@ -1,0 +1,71 @@
+---
+# Test playbook for local development
+#
+# Usage:
+#   ansible-playbook tests/test-playbook.yml -i tests/test-inventory.yml
+#
+# Create tests/test-inventory.yml (gitignored):
+#   all:
+#     hosts:
+#       test-host:
+#         ansible_host: 192.168.1.x
+#         ansible_user: your-user
+#         ansible_become_password: your-password
+#         hawser_token: "test-token"
+#
+- name: Test hawser role (install)
+  hosts: all
+  become: true
+  roles:
+    - role: "{{ playbook_dir }}/.."
+
+  post_tasks:
+    - name: Verify binary exists
+      ansible.builtin.stat:
+        path: "{{ hawser_install_dir | default('/usr/local/bin') }}/hawser"
+      register: _test_binary
+
+    - name: Assert binary installed
+      ansible.builtin.assert:
+        that: _test_binary.stat.exists
+        quiet: true
+
+    - name: Verify service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active hawser
+      register: _test_status
+      changed_when: false
+
+    - name: Assert service running
+      ansible.builtin.assert:
+        that: _test_status.stdout == "active"
+        quiet: true
+
+    - name: Verify API responds (standard mode)
+      ansible.builtin.uri:
+        url: "http://localhost:{{ hawser_port | default(2376) }}/_ping"
+        headers:
+          X-Hawser-Token: "{{ hawser_token }}"
+      register: _test_ping
+      when: (hawser_mode | default('standard')) == 'standard'
+
+    - name: Assert API OK
+      ansible.builtin.assert:
+        that: _test_ping.status == 200
+        quiet: true
+      when: (hawser_mode | default('standard')) == 'standard'
+
+    - name: Verify env file permissions
+      ansible.builtin.stat:
+        path: /etc/hawser.env
+      register: _test_env
+
+    - name: Assert env file is secure
+      ansible.builtin.assert:
+        that:
+          - _test_env.stat.mode == "0600"
+        quiet: true
+
+    - name: All tests passed
+      ansible.builtin.debug:
+        msg: "Hawser role test: ALL PASSED"

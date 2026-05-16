@@ -1,0 +1,5 @@
+# Never commit inventory files (may contain tokens/passwords)
+inventory.yml
+inventory.yaml
+inventory.ini
+tests/test-inventory*
