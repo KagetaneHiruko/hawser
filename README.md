@@ -590,7 +590,23 @@ curl http://localhost:2376/_hawser/health
    - Standard mode: Use TLS and/or token authentication
    - Edge mode: Use WSS (TLS-encrypted WebSocket)
 
-3. **Token Security**: Tokens should be strong, randomly generated strings. In Dockhand, tokens are shown only once when generated.
+3. **Token Security**: Tokens are plain-text strings — any printable ASCII works. There are no format restrictions (hex, base64, etc.).
+
+   **Recommended**: Use Dockhand's built-in token generator (when adding new Environment in Settings → Environments). It generates a cryptographically secure 32-byte base64url token and only shows it once.
+
+   **Manual generation** (if not using Dockhand's UI):
+   ```bash
+   # Option 1: openssl (recommended, 32 bytes / 43 characters)
+   openssl rand -base64 32
+
+   # Option 2: pwgen (20+ characters recommended)
+   pwgen -s 32 1
+
+   # Option 3: /dev/urandom
+   head -c 32 /dev/urandom | base64
+   ```
+
+   Use at least 24 characters. Tokens are hashed with Argon2id on the Dockhand side, so length and randomness matter more than character set.
 
 ## Building from Source
 

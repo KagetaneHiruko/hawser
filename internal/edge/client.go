@@ -1166,30 +1166,6 @@ func (c *Client) startHealthServer() {
 		}
 	})
 
-	// Info endpoint
-	mux.HandleFunc("/_hawser/info", func(w http.ResponseWriter, r *http.Request) {
-		version, _ := c.dockerClient.GetVersion(r.Context())
-		dockerVersion := "unknown"
-		if version != nil {
-			dockerVersion = version.Version
-		}
-
-		hawserVersion := c.cfg.Version
-		if hawserVersion == "" {
-			hawserVersion = "dev"
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"agentId":       c.cfg.AgentID,
-			"agentName":     c.cfg.AgentName,
-			"dockerVersion": dockerVersion,
-			"hawserVersion": hawserVersion,
-			"mode":          "edge",
-			"connected":     c.isConnected(),
-		})
-	})
-
 	addr := fmt.Sprintf("%s:%d", c.cfg.BindAddress, c.cfg.Port)
 	server := &http.Server{
 		Addr:         addr,

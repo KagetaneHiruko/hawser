@@ -42,7 +42,7 @@ RUN APKO_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") 
     "    - ca-certificates" \
     "    - busybox" \
     "    - docker-cli" \
-    "    - docker-compose=5.1.3-r0" \
+    "    - docker-compose=5.1.4-r0" \
     "    - docker-cli-buildx" \
     "    - wget" \
     "entrypoint:" \
