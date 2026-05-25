@@ -253,6 +253,7 @@ sudo journalctl -u hawser -f
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -265,6 +266,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -278,6 +280,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -293,6 +296,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -309,6 +313,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -322,6 +327,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -347,6 +353,7 @@ docker build -f Dockerfile.dev -t hawser:local .
 # Run locally built image - Standard mode
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -356,6 +363,7 @@ docker run -d \
 # Run locally built image - Edge mode
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/hawser-stacks:/opt/hawser-stacks \
   -e STACKS_DIR=/opt/hawser-stacks \
@@ -421,6 +429,7 @@ If you need custom health check settings, you can override the built-in health c
 ```bash
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e DOCKHAND_SERVER_URL=wss://your-dockhand.example.com/api/hawser/connect \
   -e TOKEN=your-agent-token \
@@ -485,6 +494,7 @@ LOG_LEVEL=debug hawser --port 2376
 # Docker
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -p 2376:2376 \
   -e LOG_LEVEL=debug \
@@ -539,6 +549,7 @@ SKIP_DF_COLLECTION=1 hawser --port 2376
 # Docker
 docker run -d \
   --name hawser \
+  --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e SKIP_DF_COLLECTION=1 \
   ghcr.io/finsys/hawser:latest
